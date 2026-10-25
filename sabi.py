@@ -302,6 +302,8 @@ async function sendResponse() {
 def home():
     return render_template_string(HTML)
 
+
+
 @app.route("/send-response", methods=["POST"])
 def send_response():
     data = request.get_json(silent=True)
@@ -309,9 +311,7 @@ def send_response():
     if not isinstance(data, dict):
         return jsonify(error="Invalid response data."), 400
 
-    activity = str(
-        data.get("activity", "Let's decide together")
-    )[:300]
+    activity = str(data.get("activity", "Let's decide together"))[:300]
     when = str(data.get("when", ""))[:300]
     other = str(data.get("other", ""))[:2000]
 
@@ -319,14 +319,12 @@ def send_response():
 
     if not api_key:
         app.logger.error("RESEND_API_KEY is not configured.")
-        return jsonify(
-            error="Email service is not configured."
-        ), 500
+        return jsonify(error="Email service is not configured."), 500
 
     email_data = {
         "from": "Sabi Website <onboarding@resend.dev>",
         "to": [RECIPIENT_EMAIL],
-        "subject": "❤️ New answer to your date invitation!",
+        "subject": "New answer to your date invitation!",
         "text": (
             "Someone answered your date invitation!\n\n"
             f"Activity: {activity}\n"
@@ -336,9 +334,8 @@ def send_response():
         )
     }
 
-       try:
+    try:
         resend.api_key = api_key
-
         result = resend.Emails.send(email_data)
 
         app.logger.info("Resend accepted email: %s", result)
@@ -350,43 +347,7 @@ def send_response():
             error="Email could not be sent. Check server logs."
         ), 502
 
-   req = urllib.request.Request(
-    "https://api.resend.com/emails",
-    data=payload,
-    headers={
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json",
-        "User-Agent": "SabiWebsite/1.0"
-    },
-    method="POST"
-)
-
-    try:
-        with urllib.request.urlopen(req, timeout=20) as response:
-            result = json.loads(response.read().decode("utf-8"))
-
-        app.logger.info(
-            "Resend accepted email. Response: %s",
-            result
-        )
-        return jsonify(success=True)
-
-    except urllib.error.HTTPError as error:
-        details = error.read().decode("utf-8", errors="replace")
-        app.logger.error(
-            "Resend API returned HTTP %s: %s",
-            error.code,
-            details
-        )
-        return jsonify(
-            error="Email could not be sent. Check the server logs."
-        ), 502
-
-    except (urllib.error.URLError, TimeoutError, OSError):
-        app.logger.exception("Could not connect to Resend.")
-        return jsonify(
-            error="Could not connect to the email service."
-        ), 502
 
 if __name__ == "__main__":
     app.run(debug=True)
+
