@@ -2,7 +2,7 @@ import os
 import json
 import urllib.request
 import urllib.error
-
+import resend
 from flask import Flask, render_template_string, request, jsonify
 
 app = Flask(__name__)
@@ -336,7 +336,19 @@ def send_response():
         )
     }
 
-    payload = json.dumps(email_data).encode("utf-8")
+       try:
+        resend.api_key = api_key
+
+        result = resend.Emails.send(email_data)
+
+        app.logger.info("Resend accepted email: %s", result)
+        return jsonify(success=True)
+
+    except Exception:
+        app.logger.exception("Resend email sending failed.")
+        return jsonify(
+            error="Email could not be sent. Check server logs."
+        ), 502
 
    req = urllib.request.Request(
     "https://api.resend.com/emails",
