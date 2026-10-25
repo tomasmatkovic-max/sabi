@@ -1,8 +1,7 @@
-
 import os
-import ssl
-import smtplib
-from email.message import EmailMessage
+import json
+import urllib.request
+import urllib.error
 
 from flask import Flask, render_template_string, request, jsonify
 
@@ -299,10 +298,6 @@ async function sendResponse() {
 """
 
 
-@app.route("/")
-def home():
-    return render_template_string(HTML)
-
 
 @app.route("/send-response", methods=["POST"])
 def send_response():
@@ -311,52 +306,71 @@ def send_response():
     if not isinstance(data, dict):
         return jsonify(error="Invalid response data."), 400
 
-    activity = str(data.get("activity", "Let's decide together"))[:300]
+    activity = str(
+        data.get("activity", "Let's decide together")
+    )[:300]
     when = str(data.get("when", ""))[:300]
     other = str(data.get("other", ""))[:2000]
 
-    # These values are set in the terminal, not saved in this file.
-    sender_email = os.environ.get("GMAIL_ADDRESS", "").strip()
-    app_password = os.environ.get("GMAIL_APP_PASSWORD", "").replace(" ", "")
-    print("GMAIL_ADDRESS configured:", bool(sender_email))
-    print("GMAIL_APP_PASSWORD configured:", bool(app_password))
-    if not sender_email or not app_password:
-        app.logger.error("Gmail environment variables are not configured.")
+    api_key = os.environ.get("RESEND_API_KEY", "").strip()
+
+    if not api_key:
+        app.logger.error("RESEND_API_KEY is not configured.")
         return jsonify(
-            error="Email is not configured. Ask the website owner to check the Gmail settings."
+            error="Email service is not configured."
         ), 500
 
-    email = EmailMessage()
-    email["Subject"] = "❤️ New answer to your date invitation!"
-    email["From"] = sender_email
-    email["To"] = RECIPIENT_EMAIL
+    email_data = {
+        "from": "Sabi Website <onboarding@resend.dev>",
+        "to": [RECIPIENT_EMAIL],
+        "subject": "❤️ New answer to your date invitation!",
+        "text": (
+            "Someone answered your date invitation!\n\n"
+            f"Activity: {activity}\n"
+            f"When: {when or 'Not specified'}\n"
+            f"Other ideas: {other or 'None'}\n\n"
+            "Sent by your date invitation website."
+        )
+    }
 
-    email.set_content(
-        "Someone answered your date invitation!\n\n"
-        f"Activity: {activity}\n"
-        f"When: {when or 'Not specified'}\n"
-        f"Other ideas: {other or 'None'}\n\n"
-        "Sent by your date invitation website."
+    payload = json.dumps(email_data).encode("utf-8")
+
+    req = urllib.request.Request(
+        "https://api.resend.com/emails",
+        data=payload,
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        },
+        method="POST"
     )
 
     try:
-        context = ssl.create_default_context()
+        with urllib.request.urlopen(req, timeout=20) as response:
+            result = json.loads(response.read().decode("utf-8"))
 
-        with smtplib.SMTP_SSL(
-            "smtp.gmail.com", 465, context=context, timeout=20
-        ) as server:
-            server.login(sender_email, app_password)
-            server.send_message(email)
-
-        app.logger.info("Date invitation response email sent.")
+        app.logger.info(
+            "Resend accepted email. Response: %s",
+            result
+        )
         return jsonify(success=True)
 
-    except (smtplib.SMTPException, OSError, TimeoutError):
-        app.logger.exception("Email delivery failed.")
+    except urllib.error.HTTPError as error:
+        details = error.read().decode("utf-8", errors="replace")
+        app.logger.error(
+            "Resend API returned HTTP %s: %s",
+            error.code,
+            details
+        )
         return jsonify(
-            error="Email delivery failed. Check the Gmail settings and try again."
-        ), 500
+            error="Email could not be sent. Check the server logs."
+        ), 502
 
+    except (urllib.error.URLError, TimeoutError, OSError):
+        app.logger.exception("Could not connect to Resend.")
+        return jsonify(
+            error="Could not connect to the email service."
+        ), 502
 
 if __name__ == "__main__":
     app.run(debug=True)
