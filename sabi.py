@@ -298,6 +298,9 @@ async function sendResponse() {
 """
 
 
+@app.route("/")
+def home():
+    return render_template_string(HTML)
 
 @app.route("/send-response", methods=["POST"])
 def send_response():
