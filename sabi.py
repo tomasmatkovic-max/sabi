@@ -338,15 +338,16 @@ def send_response():
 
     payload = json.dumps(email_data).encode("utf-8")
 
-    req = urllib.request.Request(
-        "https://api.resend.com/emails",
-        data=payload,
-        headers={
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json"
-        },
-        method="POST"
-    )
+   req = urllib.request.Request(
+    "https://api.resend.com/emails",
+    data=payload,
+    headers={
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+        "User-Agent": "SabiWebsite/1.0"
+    },
+    method="POST"
+)
 
     try:
         with urllib.request.urlopen(req, timeout=20) as response:
